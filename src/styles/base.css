@@ -1,0 +1,44 @@
+/* Look: a flight-dynamics console. Docked instrument rails around the
+   view, solid surfaces, and colour used only as symbology:
+   amber = sensor readings, magenta = your prediction,
+   green = true path, red = collision. */
+:root{
+  --space:#050608;
+  --rail:#e4e7ea;
+  --rail-2:#d6dade;
+  --field:#f6f7f8;
+  --rule:rgba(21,24,28,.14);
+  --track:rgba(21,24,28,.32);
+  --ink:#15181c;
+  --muted:#58616c;
+  --fix:#9a6200;
+  --yours:#b3168f;
+  --truth:#13803b;
+  --threat:#c42222;
+  --focus:#b3168f;
+  --ui:"Barlow", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --cond:"Barlow Condensed", "Barlow", "Arial Narrow", system-ui, sans-serif;
+  --code:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --rail:#15181c; --rail-2:#1e2227; --field:#0f1215;
+    --rule:rgba(220,228,236,.1); --track:rgba(220,228,236,.28);
+    --ink:#dde2e7; --muted:#8a939e;
+    --fix:#ffb000; --yours:#ff4fd8; --truth:#46e07a; --threat:#ff4848; --focus:#ff4fd8;
+  }
+}
+:root[data-theme="dark"]{
+  --rail:#15181c; --rail-2:#1e2227; --field:#0f1215;
+  --rule:rgba(220,228,236,.1); --track:rgba(220,228,236,.28);
+  --ink:#dde2e7; --muted:#8a939e;
+  --fix:#ffb000; --yours:#ff4fd8; --truth:#46e07a; --threat:#ff4848; --focus:#ff4fd8;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{height:100%;margin:0;background:var(--space);color:var(--ink);font-family:var(--ui);font-size:14px;line-height:1.45;font-variant-numeric:tabular-nums;overflow:hidden;-webkit-font-smoothing:antialiased}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}

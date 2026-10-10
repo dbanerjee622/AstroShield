@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Debris Field Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="src/styles/main.css">
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="title">Debris Field</span>
+      <span class="sub">Sensor simulator, seen from the rocket</span>
+    </div>
+    <div class="met" aria-label="Mission time"><span class="k">T+</span><span id="st-time">0:00.0</span></div>
+    <dl class="stats">
+      <div class="stat opt"><dt>In the field</dt><dd id="st-field">0</dd></div>
+      <div class="stat"><dt>On sensor</dt><dd id="st-tracked">0</dd></div>
+      <div class="stat"><dt>Hits taken</dt><dd class="hits" id="st-hits">0</dd></div>
+    </dl>
+    <div class="actions">
+      <button class="btn only-mobile" id="btn-controls" aria-controls="panel-controls">Settings</button>
+      <button class="btn only-mobile" id="btn-feed" aria-controls="panel-feed">Sensor feed</button>
+      <button class="btn primary" id="btn-play">Pause</button>
+    </div>
+  </header>
+
+  <aside class="side left" id="panel-controls" aria-label="Simulation settings">
+    <section class="group">
+      <h2>Simulation</h2>
+      <label class="ctl"><div class="row"><span>Time speed</span><b id="v-timeScale"></b></div><input type="range" id="c-timeScale" min="0.25" max="8" step="0.25"></label>
+      <label class="ctl"><div class="row"><span>Max debris</span><b id="v-maxDebris"></b></div><input type="range" id="c-maxDebris" min="1" max="25" step="1"></label>
+      <label class="ctl"><div class="row"><span>New debris rate</span><b id="v-spawnPerSec"></b></div><input type="range" id="c-spawnPerSec" min="0.05" max="2" step="0.05"></label>
+      <label class="ctl"><div class="row"><span>Aimed at rocket</span><b id="v-threatFraction"></b></div><input type="range" id="c-threatFraction" min="0" max="1" step="0.05"></label>
+      <label class="ctl"><div class="row"><span>Top debris speed</span><b id="v-speedMax"></b></div><input type="range" id="c-speedMax" min="60" max="800" step="10"></label>
+      <label class="ctl"><div class="row"><span>Gravity strength</span><b id="v-gravityScale"></b></div><input type="range" id="c-gravityScale" min="0" max="3" step="0.1"></label>
+    </section>
+
+    <section class="group">
+      <h2>Sensor</h2>
+      <label class="ctl"><div class="row"><span>Time between readings</span><b id="v-sensorInterval"></b></div><input type="range" id="c-sensorInterval" min="0.1" max="2" step="0.1"></label>
+      <label class="ctl"><div class="row"><span>Measurement noise</span><b id="v-sensorNoise"></b></div><input type="range" id="c-sensorNoise" min="0" max="25" step="0.5"></label>
+    </section>
+
+    <section class="group">
+      <h2>Show</h2>
+      <label class="toggle"><input type="checkbox" id="t-trails" checked><span class="swatch" style="background:var(--fix)"></span>Sensor readings</label>
+      <label class="toggle"><input type="checkbox" id="t-yours" checked><span class="swatch" style="background:var(--yours)"></span>Your predicted paths</label>
+      <label class="toggle"><input type="checkbox" id="t-truth"><span class="swatch" style="background:var(--truth)"></span>True paths, to check your math</label>
+      <label class="toggle"><input type="checkbox" id="t-zone"><span class="swatch" style="background:var(--threat)"></span>Rocket hit zone</label>
+      <label class="toggle"><input type="checkbox" id="t-orbits" checked>Planet orbits</label>
+      <label class="toggle"><input type="checkbox" id="t-labels" checked>Names and labels</label>
+      <label class="toggle"><input type="checkbox" id="t-rotate">Slowly orbit the camera</label>
+    </section>
+
+    <section class="group">
+      <h2>Planets</h2>
+      <div class="pts-wrap"><table class="pts grav" id="bodies-table"></table></div>
+      <div class="pts-wrap" style="margin-top:12px"><table class="pts grav" id="bodies-pos"></table></div>
+      <p class="note">Planets orbit the sun and Oro orbits Varo, so positions update live. Range is the distance from the rocket. The gravity slider multiplies every pull on the debris, but doesn't change the orbits.</p>
+    </section>
+
+    <section class="group">
+      <h2>Restart</h2>
+      <div class="seed">
+        <input id="seed" value="aaron" aria-label="Random seed" spellcheck="false">
+        <button class="btn" id="btn-reset">Restart</button>
+      </div>
+      <p class="note">The same seed gives the same debris every time, so you can rerun a scenario while you debug. Units are meters, seconds and kilograms. The rocket sits at (0, 0, 0) and fires its engine to hold that spot, so gravity bends the debris but doesn't move the rocket.</p>
+    </section>
+  </aside>
+
+  <main id="view">
+    <div id="labels"></div>
+    <div id="flash"></div>
+    <div class="hint-bar">Drag to orbit, scroll to zoom, click debris to inspect it.<br>Space pauses.</div>
+    <div id="toast" role="status" aria-live="polite"></div>
+  </main>
+
+  <aside class="side right" id="panel-feed" aria-label="Sensor feed">
+    <section class="group">
+      <h2>Sensor feed <span class="count" id="feed-count">0</span></h2>
+      <div class="feed-head"><span>ID</span><span>Mass</span><span>Speed</span><span>Readings</span><span></span></div>
+      <div id="feed-list"></div>
+    </section>
+    <div class="detail" id="detail"></div>
+    <div class="feed-foot"><button class="btn wide" id="btn-log">Log sensor data to console</button></div>
+  </aside>
+</div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
