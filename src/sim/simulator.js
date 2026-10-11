@@ -90,6 +90,32 @@ export class Simulator {
       const seg = d.vel.clone().multiplyScalar(dt);
       const s = Math.max(0, Math.min(1, -prev.dot(seg) / seg.lengthSq()));
       const closest = prev.addScaledVector(seg, s).length();
+      if (closest <= c.worldRadius && !d.interceptionRequested) {
+        d.interceptionRequested = true;
+        bodiesAt(this.time, 'pos');
+        fetch('/api/interception', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            r0: d.pos.toArray(),
+            v0: d.vel.toArray(),
+            planet_pos: BODIES.map(body => body.pos.toArray())
+          })
+        })
+          .then(async response => {
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+            return result;
+          })
+          .then(result => {
+            d.interceptionResult = result;
+            console.info(`Interception result for debris ${d.id}:`, result);
+          })
+          .catch(error => {
+            d.interceptionError = error.message;
+            console.error(`Interception request failed for debris ${d.id}:`, error);
+          });
+      }
       if (closest <= c.rocketRadius + d.radius) {
         this.hits++; this.events.push({ type: 'hit', d }); continue;
       }
