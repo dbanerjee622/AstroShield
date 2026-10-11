@@ -19,7 +19,8 @@ One of the major challenges we encountered during the process of designing Astro
 Accomplishments That We're Proud Of :
 For most of our team, this was our first hackathon, so building a fully functional project when we barely knew each other in the start felt like a huge success. We’re proud of the fact that we put together the amazing simulation of AstroShield using many different skills and languages such as python with countless hours and lines of code. 
 
-What We Learned : Through AstroShield, we learned how to efficiently implement AI into our design process to help us with complex parts of our projects, such as the coding for the simulation. We also strengthened our communication and teamwork by sharing ideas and collaborating our work to the overall project. AstroShield also taught us the importance of working around challenges that we faced along the way, and how to adjust so that we don’t get held back by them. 
+What We Learned : Through AstroShield, we learned how to efficiently implement AI into our design process to help us with complex parts of our projects, such as the coding for the simulation. We also learned how to write mathematical equations and sensors in python through VSCode. AstroShield also taught us the importance of working around challenges that we faced along the way, and how to adjust so that we don’t get held back by them. 
+
 
 What's Next For AstroShield :
 
