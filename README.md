@@ -53,7 +53,7 @@ Start the browser app in a second terminal:
 
 ```sh
 npm install
-npm run dev      # http://localhost:5173; /api requests are proxied to Python
+npm run dev      # /api requests are proxied to Python
 npm run build    # production build in dist/
 ```
 

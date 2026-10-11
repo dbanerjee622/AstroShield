@@ -1,9 +1,16 @@
-
 import json
 import logging
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from trajectory import interception
+import os
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
+
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "public")  # change this
+
+class ApiHandler(SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=STATIC_DIR, **kwargs)
 
 class ApiHandler(BaseHTTPRequestHandler):
     def _send_json(self, status, value):
@@ -66,14 +73,12 @@ class ApiHandler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
-    server = ThreadingHTTPServer(
-        ("127.0.0.1", 8000),
-        ApiHandler
-    )
+    host = "0.0.0.0"
+    port = int(os.environ.get("PORT", 8000))
 
-    logging.info(
-        "AstroShield Python API listening on http://127.0.0.1:8000"
-    )
+    server = ThreadingHTTPServer((host, port), ApiHandler)
+
+    logging.info("AstroShield Python API listening on %s:%s", host, port)
 
     try:
         server.serve_forever()
