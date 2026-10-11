@@ -39,6 +39,7 @@ function processEvents() {
     if (e.type === 'reset') { debris.clear(); state.selectedId = null; }
     else if (e.type === 'spawn') debris.add(e.d);
     else if (e.type === 'hit') { debris.remove(e.d.id); impact(e.d); }
+    else if (e.type === 'deflect') toast(`${tag(e.d.id)} deflected by interceptor`);
     else if (e.type === 'exit') debris.remove(e.d.id);
     else if (e.type === 'crash') { debris.remove(e.d.id); toast(`${tag(e.d.id)} crashed into ${e.body.name}`); }
   }
@@ -63,7 +64,7 @@ function frame(now) {
   processEvents();
 
   const w = view.clientWidth, h = view.clientHeight;
-  rocket.animate(realDt, clock, reduceMotion);
+  rocket.animate(realDt, clock, reduceMotion, sim.interceptors);
   debris.update(sim, simDt, stage.camera, w, h);
   planets.update(simDt, stage.camera, w, h);
   const sel = state.selectedId != null ? debris.items.get(state.selectedId) : null;

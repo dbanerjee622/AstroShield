@@ -36,6 +36,9 @@ class ApiHandler(BaseHTTPRequestHandler):
                 payload["planet_masses"],
                 t0=float(payload["t0"]),
                 gravity_scale=float(payload["gravity_scale"]),
+                hit_radius=float(payload.get("hit_radius", 15.0)),
+                planet_pos_history=payload.get("planet_pos_history"),
+                planet_history_dt=float(payload.get("planet_history_dt", 0.25)),
             )
         except (KeyError, TypeError, json.JSONDecodeError, ValueError) as exc:
             self._send_json(422, {"error": str(exc)})

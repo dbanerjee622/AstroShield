@@ -9,6 +9,9 @@ def interception(
     dt=0.05,
     tol=0.5,
     table_length=60.0,
+    hit_radius=15.0,
+    planet_pos_history=None,
+    planet_history_dt=0.25,
 ):
     """
     3D INTERCEPT SOLVER (fully commented)
@@ -45,6 +48,8 @@ def interception(
     v0 = np.asarray(v0, dtype=float)
     planet_pos = np.asarray(planet_pos, dtype=float)
     planet_masses = np.asarray(planet_masses, dtype=float)
+    if planet_pos_history is not None:
+        planet_pos_history = np.asarray(planet_pos_history, dtype=float)
     if r0.shape != (3,) or v0.shape != (3,):
         raise ValueError("r0 and v0 must each contain three coordinates.")
     if planet_pos.ndim != 2 or planet_pos.shape[1:] != (3,):
@@ -53,12 +58,22 @@ def interception(
         raise ValueError("planet_masses must contain one mass per body.")
     if not all(np.all(np.isfinite(values)) for values in (r0, v0, planet_pos, planet_masses)):
         raise ValueError("Input vectors and masses must contain finite numbers.")
-    if not all(np.isfinite(value) for value in (t0, gravity_scale, interceptor_speed, dt, tol, table_length)):
+    if not all(np.isfinite(value) for value in (
+        t0, gravity_scale, interceptor_speed, dt, tol, table_length, hit_radius, planet_history_dt
+    )):
         raise ValueError("Solver settings must be finite numbers.")
-    if interceptor_speed <= 0 or dt <= 0 or tol <= 0 or table_length <= 0:
-        raise ValueError("interceptor_speed, dt, tol, and table_length must be positive.")
+    if interceptor_speed <= 0 or dt <= 0 or tol <= 0 or table_length <= 0 or hit_radius <= 0 or planet_history_dt <= 0:
+        raise ValueError("interceptor_speed, dt, tol, table_length, hit_radius, and planet_history_dt must be positive.")
     if gravity_scale < 0 or np.any(planet_masses <= 0):
         raise ValueError("gravity_scale cannot be negative and planet masses must be positive.")
+    if planet_pos_history is not None:
+        required_samples = int(np.ceil(table_length / planet_history_dt)) + 1
+        if (planet_pos_history.ndim != 3 or
+                planet_pos_history.shape[1:] != (len(planet_pos), 3) or
+                len(planet_pos_history) < required_samples):
+            raise ValueError("planet_pos_history must cover table_length and contain one 3D position per body.")
+        if not np.all(np.isfinite(planet_pos_history)):
+            raise ValueError("planet_pos_history must contain finite positions.")
 
     # G: gravitational constant in N*m^2/kg^2.
     G = 6.674e-11
@@ -70,6 +85,20 @@ def interception(
     # This is the only force law in the program. It is used for the debris
     # and for the interceptor.
     # =====================================================================
+    def planet_positions_at(t):
+        if planet_pos_history is None:
+            return planet_pos
+        sample = (t - t0) / planet_history_dt
+        index = int(np.floor(sample))
+        if index < 0:
+            return planet_pos_history[0]
+        if index >= len(planet_pos_history) - 1:
+            return planet_pos_history[-1]
+        fraction = sample - index
+        return planet_pos_history[index] + fraction * (
+            planet_pos_history[index + 1] - planet_pos_history[index]
+        )
+
     def a_grav(x, t):
         """
         Input:  x = [x, y, z] position where you want the acceleration (m)
@@ -81,7 +110,7 @@ def interception(
         total = np.zeros(3)
 
         # Loop over planets: M = this planet's mass, p = this planet's position.
-        for M, p in zip(planet_masses, planet_pos):
+        for M, p in zip(planet_masses, planet_positions_at(t)):
             # d_vec: vector from the point x TO the planet. Its direction is the
             #        direction of the pull (gravity points toward the planet).
             d_vec = p - x
@@ -155,6 +184,30 @@ def interception(
     for n in range(n_steps):
         r, v, a, t = verlet_step(r, v, a, t, dt)
         times[n+1], r_hist[n+1], v_hist[n+1] = t, r, v
+
+    path_steps = np.diff(r_hist, axis=0)
+    path_step_lengths_sq = np.einsum("ij,ij->i", path_steps, path_steps)
+    fractions = np.zeros(n_steps)
+    moving_steps = path_step_lengths_sq > 0
+    fractions[moving_steps] = np.clip(
+        -np.einsum("ij,ij->i", r_hist[:-1][moving_steps], path_steps[moving_steps]) /
+        path_step_lengths_sq[moving_steps],
+        0,
+        1,
+    )
+    closest_points = r_hist[:-1] + path_steps * fractions[:, None]
+    approach_distances = np.linalg.norm(closest_points, axis=1)
+    closest_step = int(np.argmin(approach_distances))
+    closest_approach = float(approach_distances[closest_step])
+    closest_approach_time = float(times[closest_step] + fractions[closest_step] * dt)
+    will_hit = closest_approach <= hit_radius
+    if not will_hit:
+        return {
+            "willHit": False,
+            "closestApproach": closest_approach,
+            "closestApproachTime": closest_approach_time,
+        }
+
 
     def debris_state(t):
         """
@@ -415,6 +468,9 @@ def interception(
     impact_velocity = V - v_hit
 
     return {
+        "willHit": True,
+        "closestApproach": closest_approach,
+        "closestApproachTime": closest_approach_time,
         "converged": bool(converged),
         "missDistance": float(miss),
         "fireDirection": fire_direction.tolist(),

@@ -3,6 +3,12 @@ import { MAX_POINTS } from '../config.js';
 import { BODIES, bodiesAt } from './bodies.js';
 import { round, hashSeed, mulberry32, gaussian } from './math.js';
 
+const INTERCEPTOR_MASS = 20;
+const INTERCEPTOR_RADIUS = 2.5;
+const INTERCEPTOR_RESTITUTION = 0.5;
+const INTERCEPTION_HORIZON = 60;
+const PLANET_SAMPLE_INTERVAL = 0.25;
+
 /* =====================================================================
    SIMULATOR  (physics + sensor only, no drawing)
    With gravity off, debris moves in straight lines at constant speed.
@@ -19,11 +25,12 @@ export class Simulator {
     this.time = 0;
     this.debris = [];
     this.nextId = 1;
+    this.interceptors = [];
+    this.nextInterceptorId = 1;
     this.hits = 0;
     this.lastScan = -Infinity;
     bodiesAt(0, 'pos');
     this.events = [{ type: 'reset' }];
-    // INTERCEPTOR: e.g. this.interceptors = [];
     const n = Math.min(3, this.cfg.maxDebris);
     for (let i = 0; i < n; i++) this.spawn();
   }
@@ -80,9 +87,11 @@ export class Simulator {
     bodiesAt(this.time, 'pos');
     this.time += dt;
     const keep = [];
+    const previousPositions = new Map();
     const acc = this._acc || (this._acc = new V3());
     for (const d of this.debris) {
       const prev = d.pos.clone();
+      previousPositions.set(d, prev.clone());
       this.accelAt(d.pos, acc);
       d.vel.addScaledVector(acc, dt);
       d.pos.addScaledVector(d.vel, dt);
@@ -90,9 +99,16 @@ export class Simulator {
       const seg = d.vel.clone().multiplyScalar(dt);
       const s = Math.max(0, Math.min(1, -prev.dot(seg) / seg.lengthSq()));
       const closest = prev.addScaledVector(seg, s).length();
-      if (closest <= c.worldRadius && !d.interceptionRequested) {
+      if (closest <= c.worldRadius && !d.interceptionChecked) {
+        d.interceptionChecked = true;
         d.interceptionRequested = true;
         bodiesAt(this.time, 'pos');
+        const planetPositionHistory = [];
+        const planetSampleCount = Math.ceil(INTERCEPTION_HORIZON / PLANET_SAMPLE_INTERVAL);
+        for (let sample = 0; sample <= planetSampleCount; sample++) {
+          bodiesAt(this.time + sample * PLANET_SAMPLE_INTERVAL, '_trajectory');
+          planetPositionHistory.push(BODIES.map(body => body._trajectory.toArray()));
+        }
         fetch('/api/interception', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -101,8 +117,11 @@ export class Simulator {
             v0: d.vel.toArray(),
             planet_pos: BODIES.map(body => body.pos.toArray()),
             planet_masses: BODIES.map(body => body.mass),
+            planet_pos_history: planetPositionHistory,
+            planet_history_dt: PLANET_SAMPLE_INTERVAL,
             t0: this.time,
-            gravity_scale: this.cfg.gravityScale
+            gravity_scale: this.cfg.gravityScale,
+            hit_radius: c.rocketRadius + d.radius
           })
         })
           .then(async response => {
@@ -112,6 +131,31 @@ export class Simulator {
           })
           .then(result => {
             d.interceptionResult = result;
+            if (!result.willHit) {
+              console.info(`Debris ${d.id} is not on a collision course:`, result);
+              return;
+            }
+            if (!result.converged) throw new Error('Interception solver did not converge.');
+            if (!this.debris.includes(d)) return;
+            if (!Array.isArray(result.launchVelocity) || result.launchVelocity.length !== 3 ||
+                !result.launchVelocity.every(Number.isFinite) ||
+                !Array.isArray(result.fireDirection) || result.fireDirection.length !== 3 ||
+                !result.fireDirection.every(Number.isFinite) ||
+                !Number.isFinite(result.flightTime) || result.flightTime <= 0) {
+              throw new Error('Interception solver returned an invalid launch trajectory.');
+            }
+            this.interceptors.push({
+              id: this.nextInterceptorId++,
+              targetId: d.id,
+              pos: new V3(),
+              vel: new V3(...result.launchVelocity),
+              direction: new V3(...result.fireDirection).normalize(),
+              radius: INTERCEPTOR_RADIUS,
+              mass: INTERCEPTOR_MASS,
+              restitution: INTERCEPTOR_RESTITUTION,
+              flightTime: result.flightTime,
+              age: 0
+            });
             console.info(`Interception result for debris ${d.id}:`, result);
           })
           .catch(error => {
@@ -132,7 +176,41 @@ export class Simulator {
     this.debris = keep;
     bodiesAt(this.time, 'pos');
 
-    // INTERCEPTOR: move interceptors here and check them against debris.
+    const activeInterceptors = [];
+    for (const interceptor of this.interceptors) {
+      const target = keep.find(d => d.id === interceptor.targetId);
+      if (!target) continue;
+      const interceptorPrev = interceptor.pos.clone();
+      const targetPrev = previousPositions.get(target);
+      this.accelAt(interceptor.pos, acc);
+      interceptor.vel.addScaledVector(acc, dt);
+      interceptor.pos.addScaledVector(interceptor.vel, dt);
+      interceptor.age += dt;
+
+      const relativeStart = interceptorPrev.clone().sub(targetPrev);
+      const relativeStep = interceptor.pos.clone().sub(interceptorPrev)
+        .sub(target.pos.clone().sub(targetPrev));
+      const relativeLengthSq = relativeStep.lengthSq();
+      const closestT = relativeLengthSq
+        ? Math.max(0, Math.min(1, -relativeStart.dot(relativeStep) / relativeLengthSq))
+        : 0;
+      const separation = relativeStart.addScaledVector(relativeStep, closestT);
+      if (separation.lengthSq() <= (interceptor.radius + target.radius) ** 2) {
+        const normal = separation.lengthSq()
+          ? separation.negate().normalize()
+          : interceptor.vel.clone().sub(target.vel).normalize();
+        const relativeNormalSpeed = interceptor.vel.clone().sub(target.vel).dot(normal);
+        if (relativeNormalSpeed > 0) {
+          const impulse = (1 + interceptor.restitution) * relativeNormalSpeed /
+            (1 / interceptor.mass + 1 / target.mass);
+          target.vel.addScaledVector(normal, impulse / target.mass);
+        }
+        this.events.push({ type: 'deflect', d: target });
+        continue;
+      }
+      if (interceptor.age < interceptor.flightTime + dt) activeInterceptors.push(interceptor);
+    }
+    this.interceptors = activeInterceptors;
 
     if (this.time - this.lastScan >= c.sensorInterval - 1e-9) {
       this.lastScan = this.time;
