@@ -1,5 +1,7 @@
 # 🚀AstroShield — Debris Field Simulator🚀
 
+<a href="https://www.youtube.com/watch?v=3qRUyM67abw"><img src="https://img.youtube.com/vi/3qRUyM67abw/0.jpg" width="960" alt="Watch AstroShield Demo"></a>
+
 A sensor simulator seen from a rocket: debris flies through a field bent by
 the gravity of nearby planets, and you write the code that predicts each
 piece's trajectory from the sensor readings. 
