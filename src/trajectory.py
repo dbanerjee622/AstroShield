@@ -5,7 +5,7 @@ def interception(
     planet_masses,
     t0=0.0,
     gravity_scale=0.6,
-    interceptor_speed=50.0,
+    interceptor_speed=80.0,
     dt=0.05,
     tol=0.5,
     table_length=60.0,
