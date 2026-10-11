@@ -6,9 +6,23 @@ piece's trajectory from the sensor readings.
 
 ## Run it
 
+Install the Python dependency once:
+
+```sh
+python3 -m pip install -r requirements.txt
+```
+
+Start the Python API in one terminal:
+
+```sh
+python3 src/api.py
+```
+
+Start the browser app in a second terminal:
+
 ```sh
 npm install
-npm run dev      # http://localhost:5173
+npm run dev      # http://localhost:5173; /api requests are proxied to Python
 npm run build    # production build in dist/
 ```
 
@@ -16,8 +30,8 @@ npm run build    # production build in dist/
 
 ```
 src/
-  trajectory.js     <- your code: calculateTrajectory(reading, env)
-  prediction.js     calls your code and checks what it returns
+  trajectory.py     Python interception solver
+  api.py            HTTP endpoint that calls the solver
   config.js         default settings (the sliders edit these live)
   state.js          shared UI state (paused, selection, visibility toggles)
   main.js           wires everything together and runs the frame loop

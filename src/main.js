@@ -1,6 +1,5 @@
 import { CONFIG, SIM_DT } from './config.js';
 import { Simulator } from './sim/simulator.js';
-import { runUserCode } from './prediction.js';
 import { state } from './state.js';
 import { createStage } from './render/stage.js';
 import { createRocket } from './render/rocket.js';
@@ -62,7 +61,6 @@ function frame(now) {
     if (n >= 900) acc = 0;
   }
   processEvents();
-  runUserCode(sim, debris.items);
 
   const w = view.clientWidth, h = view.clientHeight;
   rocket.animate(realDt, clock, reduceMotion);

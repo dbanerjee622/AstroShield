@@ -99,7 +99,10 @@ export class Simulator {
           body: JSON.stringify({
             r0: d.pos.toArray(),
             v0: d.vel.toArray(),
-            planet_pos: BODIES.map(body => body.pos.toArray())
+            planet_pos: BODIES.map(body => body.pos.toArray()),
+            planet_masses: BODIES.map(body => body.mass),
+            t0: this.time,
+            gravity_scale: this.cfg.gravityScale
           })
         })
           .then(async response => {

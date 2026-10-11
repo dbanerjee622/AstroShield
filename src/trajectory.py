@@ -1,4 +1,15 @@
-def interception(r0, v0, planet_pos):
+def interception(
+    r0,
+    v0,
+    planet_pos,
+    planet_masses,
+    t0=0.0,
+    gravity_scale=0.6,
+    interceptor_speed=50.0,
+    dt=0.05,
+    tol=0.5,
+    table_length=60.0,
+):
     """
     3D INTERCEPT SOLVER (fully commented)
 
@@ -26,62 +37,32 @@ def interception(r0, v0, planet_pos):
         Step 6   angles -> launch velocity (function)
         Step 7   simulate the interceptor (function)
         Steps 8-11  loop: measure miss, build Jacobian, Newton update, repeat
-        Step 12  print the final answers
+        Step 12  return the final answers
     """
     import numpy as np   # NumPy: arrays and math functions (sqrt, sin, cos, dot, solve, ...)
 
+    r0 = np.asarray(r0, dtype=float)
+    v0 = np.asarray(v0, dtype=float)
+    planet_pos = np.asarray(planet_pos, dtype=float)
+    planet_masses = np.asarray(planet_masses, dtype=float)
+    if r0.shape != (3,) or v0.shape != (3,):
+        raise ValueError("r0 and v0 must each contain three coordinates.")
+    if planet_pos.ndim != 2 or planet_pos.shape[1:] != (3,):
+        raise ValueError("planet_pos must contain one three-coordinate position per body.")
+    if planet_masses.shape != (len(planet_pos),) or len(planet_masses) == 0:
+        raise ValueError("planet_masses must contain one mass per body.")
+    if not all(np.all(np.isfinite(values)) for values in (r0, v0, planet_pos, planet_masses)):
+        raise ValueError("Input vectors and masses must contain finite numbers.")
+    if not all(np.isfinite(value) for value in (t0, gravity_scale, interceptor_speed, dt, tol, table_length)):
+        raise ValueError("Solver settings must be finite numbers.")
+    if interceptor_speed <= 0 or dt <= 0 or tol <= 0 or table_length <= 0:
+        raise ValueError("interceptor_speed, dt, tol, and table_length must be positive.")
+    if gravity_scale < 0 or np.any(planet_masses <= 0):
+        raise ValueError("gravity_scale cannot be negative and planet masses must be positive.")
 
-    # =====================================================================
-    # STEP 0: INPUTS  (replace these with your real numbers)
-    # =====================================================================
-
-    # G: gravitational constant. Sets how strong gravity is for a given mass and
-    #    distance. Value: 6.674e-11 N*m^2/kg^2.
+    # G: gravitational constant in N*m^2/kg^2.
     G = 6.674e-11
-
-    # r0: debris POSITION at launch time t0, measured from the ship, as [x, y, z] in meters.
-    # r0 = np.array([None, None, None])
-    # connect
-
-    # v0: debris VELOCITY at launch time t0, as [vx, vy, vz] in meters per second.
-    # v0 = np.array([None, None, None])
-    # connect
-
-    # u: interceptor launch SPEED (a single number, m/s). The speed is fixed;
-    #    only its direction is unknown and gets solved for.
-    u = 50.0
-
-    # t0: the clock time (s) at which the interceptor launches and r0, v0 are valid.
-    t0 = 0.0
-    # maybe connect
-
-    # dt: the time step (s) for the simulations. The simulation moves forward dt
-    #     seconds at a time. Smaller dt = more accurate but slower.
-    dt = 0.05
-
-    # tol: how close a miss we accept (m). The Newton loop stops when the interceptor
-    #      ends up within this distance of the debris.
-    tol = 0.5
-
-    # table_length: how many seconds of debris path to precompute (s). It must be
-    #      longer than the flight time, because Newton may try a longer flight than
-    #      the first guess, and needs debris data that far ahead.
-    table_length = 60.0
-
-
-    # =====================================================================
-    # STEP 1: PLANET POSITIONS  p_i(t)
-    # Gives where each planet is at time t. The planets move, so this changes with t.
-    # The planet below is a made-up stand-in so the script runs. With real data,
-    # replace planet_positions() (and planet_masses) with an ephemeris lookup, e.g.
-    # NASA JPL Horizons. Positions must be in the SAME frame as r0 (ship at origin).
-    # =====================================================================
-
-    # planet_masses: array of planet masses M_i in kg, one entry per planet.
-    #   Add more entries for more planets (and add a matching position below).
-    planet_masses = np.array([3.3e18, 3.6e17, 1.2e17, 7.49e16, 2.4e16])
-    # planet_pos = np.array([None, None, None, None, None])
-    # connect
+    u = interceptor_speed
 
     # =====================================================================
     # STEP 2: GRAVITATIONAL ACCELERATION at a point x at time t
@@ -97,7 +78,7 @@ def interception(r0, v0, planet_pos):
         """
         # total: running sum of every planet's pull. Starts at zero. Accelerations
         #        from different planets add as vectors.
-        total = np.zeros(5)
+        total = np.zeros(3)
 
         # Loop over planets: M = this planet's mass, p = this planet's position.
         for M, p in zip(planet_masses, planet_pos):
@@ -107,10 +88,12 @@ def interception(r0, v0, planet_pos):
 
             # d: length of d_vec = distance from x to the planet (m).
             d = np.linalg.norm(d_vec)
+            if d == 0:
+                raise ValueError("A simulated object reached a planet's position.")
 
             # d_vec has length d, so dividing by d**3 leaves a vector of length
             # G*M/d**2 (the inverse-square law) still pointing at the planet.
-            total += G * M * d_vec / d**3
+            total += gravity_scale * G * M * d_vec / d**3
 
         return total
 
@@ -245,8 +228,7 @@ def interception(r0, v0, planet_pos):
     # T: flight time (s). From here on T is one of the three unknowns the solver adjusts.
     T = first_guess_time(r0, v0, u)
     if T is None:
-        raise SystemExit("No intercept possible: interceptor too slow.")
-    print(f"First-guess flight time (no gravity): {T:.4f} s")
+        raise ValueError("No intercept possible: interceptor is too slow.")
 
 
     # =====================================================================
@@ -357,7 +339,7 @@ def interception(r0, v0, planet_pos):
         # Safety check: T must be positive and the debris table must extend to t0+T,
         # otherwise debris_state() would return wrong values.
         if T <= 0 or t0 + T > times[-1]:
-            raise SystemExit("T left the debris table. Increase table_length or check the guess.")
+            raise ValueError("Estimated intercept time is outside the precomputed debris path.")
 
         # --- Step 7: simulate the current guess ---
         # X: where the interceptor ends up. V: its velocity there.
@@ -373,7 +355,6 @@ def interception(r0, v0, planet_pos):
 
         # miss: the length of e, i.e. how far apart they are (m).
         miss = np.linalg.norm(e)
-        print(f"iteration {iteration}: miss = {miss:.6f} m")
         # Stopping rule: close enough, so leave the loop.
         if miss < tol:
             converged = True
@@ -405,19 +386,23 @@ def interception(r0, v0, planet_pos):
         # delta: the correction (d_theta, d_phi, d_T) that would cancel the current
         #        miss if the response were perfectly linear. Found by solving
         #        J * delta = e (better than inverting J: faster and more stable).
-        delta = np.linalg.solve(J, e)
+        try:
+            delta = np.linalg.solve(J, e)
+        except np.linalg.LinAlgError as exc:
+            raise ValueError("The solver could not find a stable interception correction.") from exc
 
         # Apply the correction by subtracting it. It is only approximate (the real
         # response is curved), which is why the loop repeats.
         theta, phi, T = theta - delta[0], phi - delta[1], T - delta[2]
 
     # If the loop ended by running out of iterations, tell the user.
-    if not converged:
-        print("Did not converge. Try a better first guess or a partial step (0.5*delta).")
-
     # =====================================================================
     # STEP 12: FINAL ANSWERS
     # =====================================================================
+
+    X, V = propagate(theta, phi, T)
+    r_hit, v_hit = debris_state(t0 + T)
+    miss = np.linalg.norm(X - r_hit)
 
     # fire_direction: unit vector showing where to aim the interceptor.
     fire_direction = launch_velocity(theta, phi) / u
@@ -425,16 +410,16 @@ def interception(r0, v0, planet_pos):
     # launch_vel: velocity vector the interceptor leaves with (speed u).
     launch_vel = u * fire_direction
 
-    # r_hit, v_hit: debris position (= intercept point) and velocity at time t0+T.
-    r_hit, v_hit = debris_state(t0 + T)
-
     # impact_velocity: interceptor velocity relative to the debris at impact
     #                  (V is the velocity from the last propagate()).
     impact_velocity = V - v_hit
 
-    print("\n--- RESULT ---")
-    print("Fire direction (unit vector):", fire_direction)
-    print("Launch velocity (m/s):       ", launch_vel)
-    print(f"Flight time T:                {T:.4f} s")
-    print("Intercept point (m):         ", r_hit)
-    print("Impact velocity vs debris:   ", impact_velocity)
+    return {
+        "converged": bool(converged),
+        "missDistance": float(miss),
+        "fireDirection": fire_direction.tolist(),
+        "launchVelocity": launch_vel.tolist(),
+        "flightTime": float(T),
+        "interceptPoint": r_hit.tolist(),
+        "impactVelocity": impact_velocity.tolist(),
+    }
