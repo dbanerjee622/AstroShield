@@ -3,8 +3,8 @@ import { MAX_POINTS } from '../config.js';
 import { BODIES, bodiesAt } from './bodies.js';
 import { round, hashSeed, mulberry32, gaussian } from './math.js';
 
-const INTERCEPTOR_MASS = 25;
-const INTERCEPTOR_RADIUS = 1.25;
+const INTERCEPTOR_MASS = 20;
+const INTERCEPTOR_RADIUS = 1.5;
 const INTERCEPTOR_RESTITUTION = 0.5;
 const INTERCEPTION_HORIZON = 60;
 const PLANET_SAMPLE_INTERVAL = 0.25;
