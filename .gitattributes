@@ -1,2 +1,3 @@
 *.psd filter=lfs diff=lfs merge=lfs -text
 /Users/aaronaslan/Desktop/Screen\\[[:space:]]Recording\\[[:space:]]2026-10-11\\[[:space:]]at\\[[:space:]]7.27.39 AM.mov[[:space:]] filter=lfs diff=lfs merge=lfs -text
+*.mov filter=lfs diff=lfs merge=lfs -text
