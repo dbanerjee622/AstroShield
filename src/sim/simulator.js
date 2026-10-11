@@ -3,8 +3,8 @@ import { MAX_POINTS } from '../config.js';
 import { BODIES, bodiesAt } from './bodies.js';
 import { round, hashSeed, mulberry32, gaussian } from './math.js';
 
-const INTERCEPTOR_MASS = 20;
-const INTERCEPTOR_RADIUS = 2.5;
+const INTERCEPTOR_MASS = 25;
+const INTERCEPTOR_RADIUS = 1.25;
 const INTERCEPTOR_RESTITUTION = 0.5;
 const INTERCEPTION_HORIZON = 60;
 const PLANET_SAMPLE_INTERVAL = 0.25;
@@ -28,6 +28,7 @@ export class Simulator {
     this.interceptors = [];
     this.nextInterceptorId = 1;
     this.hits = 0;
+    this.deflected = 0;
     this.lastScan = -Infinity;
     bodiesAt(0, 'pos');
     this.events = [{ type: 'reset' }];
@@ -72,7 +73,7 @@ export class Simulator {
     const mass = Math.pow(10, this.uniform(Math.log10(c.massMin), Math.log10(c.massMax)));
     const radius = Math.cbrt(3 * mass / (4 * Math.PI * 2700)); // aluminum sphere
 
-    const d = { id: this.nextId++, mass, radius, pos: start, vel,
+    const d = { id: this.nextId++, mass, radius, pos: start, vel, deflected: false,
                 sensorPoints: [], measuredVelocity: null, threat,
                 start: { t: round(this.time, 3),
                          position: { x: round(start.x, 2), y: round(start.y, 2), z: round(start.z, 2) },
@@ -194,18 +195,30 @@ export class Simulator {
       const closestT = relativeLengthSq
         ? Math.max(0, Math.min(1, -relativeStart.dot(relativeStep) / relativeLengthSq))
         : 0;
-      const separation = relativeStart.addScaledVector(relativeStep, closestT);
-      if (separation.lengthSq() <= (interceptor.radius + target.radius) ** 2) {
-        const normal = separation.lengthSq()
-          ? separation.negate().normalize()
+      const combinedRadius = interceptor.radius + target.radius;
+      if (relativeStart.clone().addScaledVector(relativeStep, closestT).lengthSq() <= combinedRadius ** 2) {
+        const startDistanceSq = relativeStart.lengthSq();
+        const contactB = 2 * relativeStart.dot(relativeStep);
+        const contactC = startDistanceSq - combinedRadius ** 2;
+        const discriminant = contactB ** 2 - 4 * relativeLengthSq * contactC;
+        const contactT = contactC <= 0 || !relativeLengthSq
+          ? 0
+          : Math.max(0, Math.min(1, (-contactB - Math.sqrt(Math.max(0, discriminant))) / (2 * relativeLengthSq)));
+        const contactSeparation = relativeStart.addScaledVector(relativeStep, contactT);
+        const normal = contactSeparation.lengthSq()
+          ? contactSeparation.negate().normalize()
           : interceptor.vel.clone().sub(target.vel).normalize();
         const relativeNormalSpeed = interceptor.vel.clone().sub(target.vel).dot(normal);
         if (relativeNormalSpeed > 0) {
           const impulse = (1 + interceptor.restitution) * relativeNormalSpeed /
             (1 / interceptor.mass + 1 / target.mass);
           target.vel.addScaledVector(normal, impulse / target.mass);
+          if (!target.deflected) {
+            target.deflected = true;
+            this.deflected++;
+          }
+          this.events.push({ type: 'deflect', d: target });
         }
-        this.events.push({ type: 'deflect', d: target });
         continue;
       }
       if (interceptor.age < interceptor.flightTime + dt) activeInterceptors.push(interceptor);
