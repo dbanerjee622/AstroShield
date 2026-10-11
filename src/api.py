@@ -1,18 +1,16 @@
 import json
 import logging
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from trajectory import interception
 import os
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from trajectory import interception
 
+STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "dist")
 
-STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "public")  # change this
 
 class ApiHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=STATIC_DIR, **kwargs)
 
-class ApiHandler(BaseHTTPRequestHandler):
     def _send_json(self, status, value):
         body = json.dumps(value, allow_nan=False).encode("utf-8")
         self.send_response(status)
