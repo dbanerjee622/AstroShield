@@ -104,6 +104,7 @@ export function createHud({ sim, debris, planets }) {
     const tracked = sim.debris.filter(d => d.sensorPoints.length).sort((a, b) => lastRange(a) - lastRange(b));
     $('st-tracked').textContent = tracked.length;
     $('st-hits').textContent = sim.hits;
+    $('st-deflected').textContent = sim.deflected;
     $('feed-count').textContent = tracked.length;
     for (const v of debris.items.values()) v.verdict = state.show.truth ? verdict(sim, v.d) : null;
 
